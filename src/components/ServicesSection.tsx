@@ -3,24 +3,24 @@ import { createPortal } from 'react-dom';
 import { useHealthCenter } from '../context/HealthCenterContext';
 import { ServiceDetail } from '../types';
 import { Activity, ArrowRight, Baby, Clock, Heart, MapPin, Pill, ShieldAlert, Smile, Stethoscope, X } from 'lucide-react';
-import animalBiteImage from '../assets/images/ANIMAL BITE.jpg';
-import bnsImage from '../assets/images/BNS.png';
 import checkupImage from '../assets/images/CHECK UP.jpg';
-import covidImage from '../assets/images/COVID 19.png';
-import dentalImage from '../assets/images/DENTAL CLINIC.jpg';
+import adolescentHealthImage from '../assets/images/ADOLESENCE.jpeg';
+import familyPlanningImage from '../assets/images/FAMILYPLANNING.jpg';
+import immunizationImage from '../assets/images/IMMUNIZATION.png';
 import maternityImage from '../assets/images/MATERNITY.png';
 import medicinesImage from '../assets/images/MEDS.jpg';
-import xrayImage from '../assets/images/XRAY.jpg';
+import papSmearImage from '../assets/images/PAP SMEAR.png';
+import tbEnrollmentImage from '../assets/images/TB ENROLLMENT.jpg';
 
 const serviceImages: Partial<Record<ServiceDetail['category'], string>> = {
-  animal_bite: animalBiteImage,
-  nutrition: bnsImage,
+  animal_bite: papSmearImage,
+  nutrition: immunizationImage,
   checkup: checkupImage,
-  antigen_testing: covidImage,
-  dental: dentalImage,
+  antigen_testing: adolescentHealthImage,
+  dental: familyPlanningImage,
   maternity: maternityImage,
   pharmacy: medicinesImage,
-  xray: xrayImage,
+  xray: tbEnrollmentImage,
 };
 
 const illustrationForService = (category: string) => {
