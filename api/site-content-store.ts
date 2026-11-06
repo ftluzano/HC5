@@ -73,6 +73,16 @@ export async function ensureSiteContent(db: ReturnType<typeof createClient>) {
         args: [key, String(value), now],
       })),
     ], 'write');
+    for (const contentType of ['service', 'news', 'outreach'] as const) {
+      const currentIds = seeds.filter((seed) => seed.type === contentType).map((seed) => seed.id);
+      const placeholders = currentIds.map(() => '?').join(', ');
+      await db.execute({
+        sql: `DELETE FROM public_site_content
+              WHERE content_type = ? AND updated_by = 'system-seed'
+              ${placeholders ? `AND content_id NOT IN (${placeholders})` : ''}`,
+        args: [contentType, ...currentIds],
+      });
+    }
   })().catch((error: unknown) => {
     initialized = null;
     throw error;

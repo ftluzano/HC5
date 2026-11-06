@@ -39,7 +39,7 @@ type RouteInfo = {
 
 type RouteFeatureCollection = GeoJSON.FeatureCollection<GeoJSON.LineString>;
 
-const destination: L.LatLngTuple = [14.5429309, 121.0656783];
+const destination: L.LatLngTuple = [14.5416087, 121.0679262];
 const destinationName = 'Mayor Juan R. Sanchez Health Center';
 const destinationAddress = 'P. Rosales St., Brgy. Sta. Ana, Pateros, Metro Manila';
 const wazeUrl = `https://www.waze.com/ul?q=${encodeURIComponent(destinationAddress)}&navigate=yes`;

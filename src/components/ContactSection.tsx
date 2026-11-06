@@ -53,7 +53,7 @@ export const ContactSection: React.FC = () => {
               <h3 className="text-sm font-bold text-slate-900">Clinic schedules</h3>
               <p className="mt-1 text-sm text-slate-600">No permanent doctor; duty personnel Tue-Fri, 8-11 AM</p>
               <p className="mt-1 text-sm text-slate-600">No X-ray service listed</p>
-              <p className="mt-1 text-sm text-slate-600">Dental: Mon-Tue MJRS · Wed Outreach · Thu-Fri Delfin Salonga</p>
+              <p className="mt-1 text-sm text-slate-600">Services: Monday-Friday, 7:00 AM-11:30 AM and 12:00 PM-4:00 PM</p>
             </div>
           </div>
         </div>

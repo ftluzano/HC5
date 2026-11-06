@@ -5,7 +5,7 @@ import { useHealthCenter } from '../context/HealthCenterContext';
 export const PublicInformation: React.FC = () => {
   const { language, siteContent, siteContentError } = useHealthCenter();
   const isFilipino = language === 'fil';
-  const featuredServices = siteContent.services.slice(0, 5);
+  const featuredServices = siteContent.services;
   const updates = siteContent.news.slice(0, 3);
   const outreach = siteContent.outreach.slice(0, 3);
   const settings = siteContent.settings;
