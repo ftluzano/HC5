@@ -1,5 +1,5 @@
 import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { auth } from '../firebase';
+import { useAuth } from '@clerk/react';
 import { AdminSiteContentItem, ClinicPublicSettings, PublicSiteContent } from '../types';
 import { ImagePlus } from 'lucide-react';
 
@@ -136,10 +136,9 @@ async function optimizeAnnouncementImage(file: File) {
   });
 }
 
-async function postAdminAction(action: string, payload: Record<string, unknown>) {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Sign in as an administrator to manage website content.');
-  const token = await user.getIdToken();
+async function postAdminAction(action: string, payload: Record<string, unknown>, getToken: () => Promise<string | null>) {
+  const token = await getToken();
+  if (!token) throw new Error('Sign in as an administrator to manage website content.');
   const response = await fetch('/api/admin', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -151,6 +150,7 @@ async function postAdminAction(action: string, payload: Record<string, unknown>)
 }
 
 export const AdminContentManager: React.FC = () => {
+  const { getToken } = useAuth();
   const [type, setType] = useState<ContentType>('news');
   const [items, setItems] = useState<AdminSiteContentItem[]>([]);
   const [settings, setSettings] = useState<ClinicPublicSettings | null>(null);
@@ -180,9 +180,8 @@ export const AdminContentManager: React.FC = () => {
 
   const load = async () => {
     try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('Sign in as an administrator to manage website content.');
-      const token = await user.getIdToken();
+      const token = await getToken();
+      if (!token) throw new Error('Sign in as an administrator to manage website content.');
       const response = await fetch('/api/admin?mode=site_content', {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
@@ -214,9 +213,8 @@ export const AdminContentManager: React.FC = () => {
       if (loadingContent || savingRef.current || document.visibilityState === 'hidden') return;
       loadingContent = true;
       try {
-        const user = auth.currentUser;
-        if (!user) return;
-        const token = await user.getIdToken();
+        const token = await getToken();
+        if (!token) return;
         const response = await fetch('/api/admin?mode=site_content', {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',
@@ -332,7 +330,7 @@ export const AdminContentManager: React.FC = () => {
       }
       await postAdminAction('save_site_content', {
         contentType: type, contentId: selectedId, content: normalized, published,
-      });
+      }, getToken);
       const saved = await load();
       const savedItem = saved.items.find((item) => item.content_type === type && item.content_id === selectedId);
       if (!savedItem || savedItem.published !== (published ? 1 : 0)
@@ -357,7 +355,7 @@ export const AdminContentManager: React.FC = () => {
     setSaving(true);
     setError('');
     try {
-      await postAdminAction('delete_site_content', { contentType: type, contentId: selectedId });
+      await postAdminAction('delete_site_content', { contentType: type, contentId: selectedId }, getToken);
       setSelectedId('');
       setContent(emptyContent(type));
       const saved = await load();
@@ -379,7 +377,7 @@ export const AdminContentManager: React.FC = () => {
     setError('');
     setNotice('');
     try {
-      await postAdminAction('save_public_settings', { settings });
+      await postAdminAction('save_public_settings', { settings }, getToken);
       const saved = await load();
       const settingsMatch = Object.entries(settings).every(([key, value]) => (
         saved.settings[key as keyof ClinicPublicSettings] === value.trim()
@@ -403,7 +401,7 @@ export const AdminContentManager: React.FC = () => {
     setNotice('');
     try {
       const imageData = await optimizeAnnouncementImage(file);
-      const result = await postAdminAction('upload_announcement_image', { contentId: selectedId, imageData });
+      const result = await postAdminAction('upload_announcement_image', { contentId: selectedId, imageData }, getToken);
       if (typeof result.imageUrl !== 'string') throw new Error('The image upload did not return a valid image URL.');
       setContent((current) => ({ ...current, imageUrl: result.imageUrl }));
       setNotice('Image uploaded. Save content to publish the announcement image.');

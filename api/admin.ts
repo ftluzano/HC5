@@ -2,9 +2,8 @@ import 'dotenv/config';
 import { createClient } from '@libsql/client';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
 import { clinicPublicSettingKeys, ensureSiteContent, getContentDatabase, readSiteContent, validateSiteContent } from './site-content-store.js';
+import { verifyClerkToken, type ClerkIdentity } from './clerk-auth.js';
 
 type ApiRequest = IncomingMessage & { body?: unknown; headers: IncomingMessage['headers'] & { authorization?: string } };
 type ApiResponse = ServerResponse & {
@@ -49,23 +48,6 @@ function text(value: unknown, limit: number) {
 function announcementImageId(value: unknown) {
   if (typeof value !== 'string') return null;
   return /^\/api\/content-image\?id=([0-9a-f-]{36})$/i.exec(value)?.[1] ?? null;
-}
-
-function getFirebaseAdmin() {
-  if (getApps().length > 0) return getAuth();
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
-  let credential;
-  if (serviceAccountJson) {
-    try {
-      credential = cert(JSON.parse(serviceAccountJson));
-    } catch {
-      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON or is missing service-account fields.');
-    }
-  } else {
-    credential = applicationDefault();
-  }
-  initializeApp({ credential });
-  return getAuth();
 }
 
 async function initializeAdminDatabase(db: ReturnType<typeof createClient>) {
@@ -136,19 +118,21 @@ async function authenticate(request: ApiRequest) {
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
   if (!token) return null;
   try {
-    return await getFirebaseAdmin().verifyIdToken(token);
+    return await verifyClerkToken(token);
   } catch {
     return null;
   }
 }
 
-function isAdmin(decoded: Awaited<ReturnType<ReturnType<typeof getFirebaseAdmin>['verifyIdToken']>>) {
-  if (decoded.admin === true) return true;
-  const allowedUid = process.env.ADMIN_UIDS?.split(',').map((uid) => uid.trim()).filter(Boolean) ?? [];
+function isAdmin(decoded: ClerkIdentity) {
+  if (decoded.admin) return true;
+  const allowedUid = [
+    ...(process.env.ADMIN_UIDS?.split(',') ?? []),
+    ...(process.env.ADMIN_USER_IDS?.split(',') ?? []),
+  ].map((uid) => uid.trim()).filter(Boolean);
   if (allowedUid.includes(decoded.uid)) return true;
   const allowedEmails = process.env.ADMIN_EMAILS?.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean) ?? [];
-  return typeof decoded.email === 'string'
-    && allowedEmails.includes(decoded.email.toLowerCase());
+  return decoded.email !== undefined && allowedEmails.includes(decoded.email.toLowerCase());
 }
 
 export default async function handler(request: ApiRequest, response: ApiResponse) {

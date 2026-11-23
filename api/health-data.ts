@@ -2,8 +2,9 @@ import 'dotenv/config';
 import { createClient } from '@libsql/client';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { verifyClerkToken } from './clerk-auth.js';
 
-type ApiRequest = IncomingMessage & { body?: unknown };
+type ApiRequest = IncomingMessage & { body?: unknown; headers: IncomingMessage['headers'] & { authorization?: string } };
 type ApiResponse = ServerResponse & {
   status: (code: number) => ApiResponse;
   json: (body: unknown) => void;
@@ -21,6 +22,18 @@ function getDatabase() {
 
 function text(value: unknown, limit: number) {
   return typeof value === 'string' ? value.trim().slice(0, limit) : '';
+}
+
+async function authenticate(request: ApiRequest) {
+  const authorization = text(request.headers.authorization, 2000);
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return null;
+  try {
+    return await verifyClerkToken(token);
+  } catch (error) {
+    console.error('Health-data Clerk session verification failed:', error);
+    return null;
+  }
 }
 
 async function initializeDatabase(db: ReturnType<typeof createClient>) {
@@ -106,8 +119,9 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     return response.status(500).json({ error: 'Database initialization failed.' });
   }
 
-  const ownerUid = text(request.headers['x-user-id'], 128);
-  if (!ownerUid) return response.status(401).json({ error: 'Firebase user ID is required.' });
+  const identity = await authenticate(request);
+  if (!identity) return response.status(401).json({ error: 'A valid Clerk sign-in is required.' });
+  const ownerUid = identity.uid;
 
   if (request.method === 'GET') {
     const resource = text(request.headers['x-resource'], 40);

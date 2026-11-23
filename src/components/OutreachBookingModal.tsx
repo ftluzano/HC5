@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useHealthCenter } from '../context/HealthCenterContext';
 import { AlertCircle, CalendarDays, CheckCircle2, Clock, X } from 'lucide-react';
-import type { User } from 'firebase/auth';
+import { useAuth, useUser } from '@clerk/react';
 
 interface AppointmentReceipt {
   referenceCode: string;
@@ -36,7 +36,9 @@ function appointmentServiceLabel(service: { id: string; title: string; titleFil:
   return isFilipino ? service.titleFil : service.title;
 }
 
-export const OutreachBookingModal: React.FC<{ user: User }> = ({ user }) => {
+export const OutreachBookingModal: React.FC = () => {
+  const { getToken } = useAuth();
+  const { user } = useUser();
   const {
     t,
     language,
@@ -98,7 +100,9 @@ export const OutreachBookingModal: React.FC<{ user: User }> = ({ user }) => {
     let active = true;
     const loadAvailability = async () => {
       try {
-        const token = await user.getIdToken();
+        if (!user) throw new Error('Sign in to view appointment availability.');
+        const token = await getToken();
+        if (!token) throw new Error('A sign-in session is required.');
         const response = await fetch('/api/appointments', {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',
@@ -176,7 +180,8 @@ export const OutreachBookingModal: React.FC<{ user: User }> = ({ user }) => {
     setSubmitting(true);
 
     try {
-      const token = await user.getIdToken();
+      const token = await getToken();
+      if (!token) throw new Error('A sign-in session is required.');
       const response = await fetch('/api/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -210,7 +215,7 @@ export const OutreachBookingModal: React.FC<{ user: User }> = ({ user }) => {
           markAppointmentRequestPending();
         }
         const message = response.status === 401
-          ? 'Your sign-in could not be verified. Check that the Firebase service account in Vercel belongs to this app’s Firebase project, then redeploy.'
+          ? 'Your Clerk sign-in session could not be verified. Check your Clerk configuration and redeploy.'
           : result.error || 'Could not submit your appointment request.';
         throw new Error(message);
       }
