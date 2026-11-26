@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useState, useEffect } from 'react';
-import { useAuth, useUser } from '@clerk/react';
+import { useAuth } from '@clerk/react';
 import {
   Language,
   AppointmentBooking,
@@ -34,12 +34,13 @@ interface HealthCenterContextType {
   submitContact: (data: { name: string; phone: string; email: string; zone: string; topic: string; message: string }) => ContactSubmission;
   bookingModalOpen: boolean;
   setBookingModalOpen: (open: boolean) => void;
+  authModalOpen: boolean;
+  setAuthModalOpen: (open: boolean) => void;
+  isSignedIn: boolean;
   messagesOpen: boolean;
   setMessagesOpen: (open: boolean) => void;
-  clinicOpen: boolean | null;
-  clinicStatusError: string;
-  appointmentRequestAvailability: 'checking' | 'available' | 'pending' | 'error';
-  markAppointmentRequestPending: () => void;
+  appointmentRequestAvailability: 'checking' | 'available' | 'pending' | 'confirmed' | 'error';
+  markAppointmentRequestStatus: (status: 'pending' | 'confirmed') => void;
   siteContent: PublicSiteContent;
   siteContentError: string;
   unreadAdminMessageCount: number;
@@ -54,8 +55,7 @@ interface HealthCenterContextType {
 const HealthCenterContext = createContext<HealthCenterContextType | undefined>(undefined);
 
 export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { getToken } = useAuth();
-  const { user } = useUser();
+  const { getToken, isSignedIn } = useAuth();
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = localStorage.getItem('mfhc_language');
     return (saved === 'fil' || saved === 'en') ? saved : 'en';
@@ -78,9 +78,8 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
-  const [clinicOpen, setClinicOpen] = useState<boolean | null>(null);
-  const [clinicStatusError, setClinicStatusError] = useState('');
-  const [appointmentRequestAvailability, setAppointmentRequestAvailability] = useState<'checking' | 'available' | 'pending' | 'error'>('checking');
+  const [appointmentRequestAvailability, setAppointmentRequestAvailability] = useState<'checking' | 'available' | 'pending' | 'confirmed' | 'error'>(() => isSignedIn ? 'checking' : 'available');
+  const [authModalOpen, setAuthModalOpenState] = useState(false);
   const [siteContent, setSiteContent] = useState<PublicSiteContent>(() => ({
     services: SERVICES_DATA,
     news: NEWS_UPDATES,
@@ -90,39 +89,54 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [siteContentError, setSiteContentError] = useState('');
   const [unreadAdminMessageCount, setUnreadAdminMessageCount] = useState(0);
   const [unreadMessagesError, setUnreadMessagesError] = useState('');
-  const [selectedProgramForBooking, setSelectedProgramForBooking] = useState<string | null>(null);
+  const [selectedProgramForBooking, setSelectedProgramForBooking] = useState<string | null>(() => sessionStorage.getItem('mfhc_booking_program'));
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem('mfhc_language', language);
+    document.documentElement.lang = language === 'fil' ? 'fil' : 'en';
   }, [language]);
 
-  const setBookingAvailabilityModal = (open: boolean) => {
-    if (open && (clinicOpen !== true || appointmentRequestAvailability !== 'available')) return;
-    setBookingModalOpen(open);
+  const setAuthModalOpen = (open: boolean) => {
+    if (!open) {
+      sessionStorage.removeItem('mfhc_booking_after_signin');
+      sessionStorage.removeItem('mfhc_booking_program');
+      setSelectedProgramForBooking(null);
+    }
+    setAuthModalOpenState(open);
   };
 
-  useEffect(() => {
-    if (clinicOpen !== true || appointmentRequestAvailability === 'pending') setBookingModalOpen(false);
-  }, [clinicOpen, appointmentRequestAvailability]);
+  const setBookingAvailabilityModal = (open: boolean) => {
+    if (!open) {
+      setBookingModalOpen(false);
+      return;
+    }
+    if (!isSignedIn) {
+      sessionStorage.setItem('mfhc_booking_after_signin', 'true');
+      setAuthModalOpenState(true);
+      return;
+    }
+    if (appointmentRequestAvailability !== 'available') return;
+    setBookingModalOpen(true);
+  };
 
-  const markAppointmentRequestPending = useCallback(() => {
-    setAppointmentRequestAvailability('pending');
+  const markAppointmentRequestStatus = useCallback((status: 'pending' | 'confirmed') => {
+    setAppointmentRequestAvailability(status);
   }, []);
 
   useEffect(() => {
+    if (!isSignedIn) {
+      setAppointmentRequestAvailability('available');
+      return;
+    }
     let active = true;
     let loading = false;
     const refreshAppointmentRequestAvailability = async () => {
       if (loading || document.visibilityState === 'hidden') return;
       loading = true;
       try {
-        if (!user) {
-          if (active) setAppointmentRequestAvailability('error');
-          return;
-        }
         const token = await getToken();
-        if (!token) throw new Error("A sign-in session is required.");
+        if (!token) throw new Error("Clerk sign-in is required.");
         const response = await fetch('/api/appointments', {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',
@@ -135,11 +149,16 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
           throw new Error(result.error || 'Appointment request status could not be checked.');
         }
         if (active) {
-          setAppointmentRequestAvailability(
-            result.appointments.some((appointment) => appointment.status.toLowerCase() === 'pending')
-              ? 'pending'
-              : 'available',
-          );
+          const statuses = result.appointments.map((appointment) => appointment.status.toLowerCase());
+          const availability = statuses.includes('pending')
+            ? 'pending'
+            : statuses.includes('confirmed') ? 'confirmed' : 'available';
+          setAppointmentRequestAvailability(availability);
+          if (sessionStorage.getItem('mfhc_booking_after_signin') === 'true') {
+            sessionStorage.removeItem('mfhc_booking_after_signin');
+            sessionStorage.removeItem('mfhc_booking_program');
+            if (availability === 'available') setBookingModalOpen(true);
+          }
         }
       } catch {
         if (active) setAppointmentRequestAvailability('error');
@@ -151,55 +170,14 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (document.visibilityState === 'visible') void refreshAppointmentRequestAvailability();
     };
     void refreshAppointmentRequestAvailability();
-    const timer = window.setInterval(() => void refreshAppointmentRequestAvailability(), 3000);
+    const timer = window.setInterval(() => void refreshAppointmentRequestAvailability(), 15_000);
     document.addEventListener('visibilitychange', refreshWhenVisible);
     return () => {
       active = false;
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
-  }, [getToken, user]);
-
-  useEffect(() => {
-    let active = true;
-    let loading = false;
-    const loadClinicStatus = async () => {
-      if (loading || document.visibilityState === 'hidden') return;
-      loading = true;
-      try {
-        if (!user) return;
-        const token = await getToken();
-        if (!token) throw new Error("A sign-in session is required.");
-        const response = await fetch('/api/admin?mode=clinic_status', {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        });
-        const result = await response.json() as { clinicOpen?: boolean; error?: string };
-        if (!response.ok || typeof result.clinicOpen !== 'boolean') {
-          throw new Error(result.error || 'Clinic status could not be loaded.');
-        }
-        if (!active) return;
-        setClinicOpen(result.clinicOpen);
-        setClinicStatusError('');
-      } catch (caught) {
-        if (!active) return;
-        setClinicStatusError(caught instanceof Error ? caught.message : 'Clinic status could not be loaded.');
-      } finally {
-        loading = false;
-      }
-    };
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') void loadClinicStatus();
-    };
-    void loadClinicStatus();
-    const timer = window.setInterval(() => void loadClinicStatus(), 3000);
-    document.addEventListener('visibilitychange', refreshWhenVisible);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', refreshWhenVisible);
-    };
-  }, [getToken, user]);
+  }, [getToken, isSignedIn]);
 
   useEffect(() => {
     let active = true;
@@ -228,7 +206,7 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (document.visibilityState === 'visible') void loadSiteContent();
     };
     void loadSiteContent();
-    const timer = window.setInterval(() => void loadSiteContent(), 3000);
+    const timer = window.setInterval(() => void loadSiteContent(), 60_000);
     document.addEventListener('visibilitychange', refreshWhenVisible);
     return () => {
       active = false;
@@ -238,9 +216,9 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const refreshUnreadAdminMessages = useCallback(async () => {
-    if (!user) return;
+    if (!isSignedIn) return;
     const token = await getToken();
-    if (!token) return;
+    if (!token) throw new Error("Clerk sign-in is required.");
     const response = await fetch('/api/admin?mode=unread_messages', {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
@@ -251,12 +229,11 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
     setUnreadAdminMessageCount(result.unreadCount);
     setUnreadMessagesError('');
-  }, [getToken, user]);
+  }, [getToken, isSignedIn]);
 
   const markAppointmentMessagesRead = useCallback(async (appointmentId: string) => {
-    if (!user) throw new Error('Sign in to view appointment messages.');
     const token = await getToken();
-    if (!token) throw new Error('A sign-in session is required.')
+    if (!token) throw new Error("Clerk sign-in is required.");
     const response = await fetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -265,9 +242,14 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const result = await response.json() as { error?: string };
     if (!response.ok) throw new Error(result.error || 'Messages could not be marked as read.');
     await refreshUnreadAdminMessages();
-  }, [getToken, refreshUnreadAdminMessages, user]);
+  }, [getToken, refreshUnreadAdminMessages]);
 
   useEffect(() => {
+    if (!isSignedIn) {
+      setUnreadAdminMessageCount(0);
+      setUnreadMessagesError('');
+      return;
+    }
     let active = true;
     const refresh = async () => {
       try {
@@ -278,20 +260,19 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     };
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 3000);
+    const timer = window.setInterval(() => void refresh(), 15_000);
     return () => {
       active = false;
       window.clearInterval(timer);
     };
-  }, [refreshUnreadAdminMessages]);
+  }, [refreshUnreadAdminMessages, isSignedIn]);
 
   useEffect(() => {
-    if (!user) return;
-
+    if (!isSignedIn) return;
     const loadData = async () => {
       try {
         const token = await getToken();
-        if (!token) throw new Error("A sign-in session is required.");
+        if (!token) throw new Error("Clerk sign-in is required.");
         const [patientsResponse, contactsResponse, appointmentsResponse] = await Promise.all([
           fetch('/api/health-data', { headers: { Authorization: `Bearer ${token}`, 'x-resource': 'patients' } }),
           fetch('/api/health-data', { headers: { Authorization: `Bearer ${token}`, 'x-resource': 'contacts' } }),
@@ -353,7 +334,7 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     };
     void loadData();
-  }, [getToken, user]);
+  }, [getToken, isSignedIn]);
 
 
   useEffect(() => {
@@ -373,20 +354,15 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const t = translations[language];
 
-  const getAuthorizationHeaders = useCallback(async () => {
+  const authorizedPost = async (url: string, body: unknown) => {
     const token = await getToken();
-    if (!token) throw new Error('A sign-in session is required.');
-    return { Authorization: `Bearer ${token}` };
-  }, [getToken]);
-
-  const postAuthenticated = useCallback(async (url: string, body: Record<string, unknown>) => {
-    const authorization = await getAuthorizationHeaders();
+    if (!token) throw new Error('Clerk sign-in is required.');
     return fetch(url, {
       method: 'POST',
-      headers: { ...authorization, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     });
-  }, [getAuthorizationHeaders]);
+  };
 
   const bookAppointment = (data: Omit<AppointmentBooking, 'id' | 'referenceCode' | 'status' | 'createdAt'>): AppointmentBooking => {
     const refCode = `MFHC-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -398,7 +374,7 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
       createdAt: new Date().toISOString()
     };
 
-    void postAuthenticated('/api/appointments', {
+    void authorizedPost('/api/appointments', {
         patientName: newAppointment.patientName,
         phone: newAppointment.contactNumber,
         email: newAppointment.email,
@@ -407,9 +383,7 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
         preferredDate: newAppointment.appointmentDate,
         preferredTime: newAppointment.timeSlot,
         privacyConsent: true,
-      }).then((response) => {
-        if (!response.ok) throw new Error('Appointment could not be saved.');
-      }).catch((error) => setNotificationToast(error instanceof Error ? error.message : 'Appointment could not be saved to the database.'));
+      }).catch(() => setNotificationToast('Appointment could not be saved to the database.'));
 
     setAppointments(prev => [newAppointment, ...prev]);
     setNotificationToast(
@@ -423,7 +397,7 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const cancelAppointment = (id: string) => {
     const appointment = appointments.find((item) => item.id === id);
     if (!appointment) return;
-    void postAuthenticated('/api/appointments', { action: 'cancel', referenceCode: appointment.referenceCode }).then((response) => {
+    void authorizedPost('/api/appointments', { action: 'cancel', referenceCode: appointment.referenceCode }).then((response) => {
       if (!response.ok) throw new Error('Appointment could not be cancelled.');
       setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'Cancelled' as const } : a));
       setNotificationToast(language === 'fil' ? 'Kinansela ang iskedyul.' : 'Appointment cancelled.');
@@ -441,7 +415,7 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
       radiologyReports: []
     };
 
-    void postAuthenticated('/api/health-data', { resource: 'patient', ...newPatient, patientNumber: patNo }).then((response) => {
+    void authorizedPost('/api/health-data', { resource: 'patient', ...newPatient, patientNumber: patNo }).then((response) => {
       if (!response.ok) throw new Error('Patient record could not be saved.');
       setPatientRecords(prev => [newPatient, ...prev]);
       setActivePatientState(newPatient);
@@ -466,11 +440,7 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
       recordedBy: 'Nurse / Triage Desk'
     };
 
-    void postAuthenticated('/api/health-data', { resource: 'vital', patientId, ...entry })
-      .then((response) => {
-        if (!response.ok) throw new Error('Vitals could not be saved.');
-      })
-      .catch(() => setNotificationToast('Vitals could not be saved to the database.'));
+    void authorizedPost('/api/health-data', { resource: 'vital', patientId, ...entry }).catch(() => setNotificationToast('Vitals could not be saved to the database.'));
 
     setPatientRecords(prev => prev.map(p => {
       if (p.id === patientId) {
@@ -498,14 +468,10 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
       prescribedDate: new Date().toISOString().split('T')[0],
       nextRefillDate: 'Next Month (30-day supply)',
       status: 'Available for Pick-up' as const,
-      prescribedBy: 'Mayor Juan R. Sanchez duty personnel'
+      prescribedBy: 'Tiffany Almuros (Head of Doctors)'
     };
 
-    void postAuthenticated('/api/health-data', { resource: 'prescription', patientId, ...entry })
-      .then((response) => {
-        if (!response.ok) throw new Error('Prescription could not be saved.');
-      })
-      .catch(() => setNotificationToast('Prescription could not be saved to the database.'));
+    void authorizedPost('/api/health-data', { resource: 'prescription', patientId, ...entry }).catch(() => setNotificationToast('Prescription could not be saved to the database.'));
 
     setPatientRecords(prev => prev.map(p => {
       if (p.id === patientId) {
@@ -543,20 +509,16 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const updated = [...(chatStore[patientId] || []), newMsg];
     setChatStore(prev => ({ ...prev, [patientId]: updated }));
-    void postAuthenticated('/api/health-data', {
-      resource: 'message', patientId, sender: newMsg.sender, senderName: newMsg.senderName, senderRole: '', message: newMsg.text,
-    }).then((response) => {
-      if (!response.ok) throw new Error('Message could not be saved.');
-    }).catch(() => setNotificationToast('Message could not be saved to the database.'));
+    void authorizedPost('/api/health-data', { resource: 'message', patientId, sender: newMsg.sender, senderName: newMsg.senderName, senderRole: '', message: newMsg.text }).catch(() => setNotificationToast('Message could not be saved to the database.'));
 
     setTimeout(() => {
       const botReply: ChatMessage = {
         id: `m-${Date.now() + 1}`,
         sender: 'staff',
-        senderName: 'Mayor Juan R. Sanchez Health Center Staff / Clinic Desk',
-        senderRole: 'Mayor Juan R. Sanchez Health Center',
+        senderName: 'Ms. Sery Ann G. Ulanday, RN / Clinic Desk',
+        senderRole: 'Mr. Flores Health Center',
         text: language === 'fil'
-          ? `Natanggap po namin ang mensahe para sa ${activePatient.fullName} (${activePatient.zone}). Normal na oras ng center: Lunes at Miyerkules, 8AM-5PM.`
+          ? `Natanggap po namin ang mensahe para sa ${activePatient.fullName} (${activePatient.zone}). Bukas ang center Lunes hanggang Biyernes 7AM-4PM.`
           : `We received your inquiry for ${activePatient.fullName} (${activePatient.zone}). The center is open Monday to Friday, 7:00 AM - 4:00 PM.`,
         timestamp: 'Just now'
       };
@@ -577,7 +539,7 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
       status: 'Received'
     };
 
-    void postAuthenticated('/api/health-data', { resource: 'contact', ...newSubmission, ticketId: newSubmission.ticketId }).then((response) => {
+    void authorizedPost('/api/health-data', { resource: 'contact', ...newSubmission, ticketId: newSubmission.ticketId }).then((response) => {
       if (!response.ok) throw new Error('Inquiry could not be saved.');
       setContactSubmissions(prev => [newSubmission, ...prev]);
       setNotificationToast(
@@ -591,8 +553,9 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const openBookingForProgram = (programId: string) => {
-    if (clinicOpen !== true) return;
+    if (appointmentRequestAvailability !== 'available') return;
     setSelectedProgramForBooking(programId);
+    if (!isSignedIn) sessionStorage.setItem('mfhc_booking_program', programId);
     setBookingAvailabilityModal(true);
   };
 
@@ -620,12 +583,13 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
         submitContact,
         bookingModalOpen,
         setBookingModalOpen: setBookingAvailabilityModal,
+        authModalOpen,
+        setAuthModalOpen,
+        isSignedIn: Boolean(isSignedIn),
         messagesOpen,
         setMessagesOpen,
-        clinicOpen,
-        clinicStatusError,
         appointmentRequestAvailability,
-        markAppointmentRequestPending,
+        markAppointmentRequestStatus,
         siteContent,
         siteContentError,
         unreadAdminMessageCount,

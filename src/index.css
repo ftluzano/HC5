@@ -12,6 +12,9 @@
     --color-page-bg: #f8faf9;
     --color-mint: #eaf3ee;
     --color-border: #dce7e1;
+    --color-amber: #f4c95d;
+    --accessibility-font-scale: 1;
+    font-size: calc(16px * var(--accessibility-font-scale));
     font-family: 'Inter', sans-serif;
     color: var(--color-body);
     font-synthesis: none;
@@ -35,43 +38,67 @@
     text-wrap: balance;
   }
 
-  .site-card {
+  .card {
     background: var(--color-card-bg);
-    border: 1px solid var(--color-border);
     border-radius: 0.5rem;
-    box-shadow: 0 4px 16px rgba(15, 77, 60, 0.045);
+    box-shadow: 0 2px 8px rgba(23, 58, 55, 0.04);
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+
+  .section-spacing {
+    padding: 32px 0;
+  }
+
+  .status-badge-open {
+    background: var(--color-open);
+    color: #fff;
+    border-radius: 0.5rem;
+    padding: 0.25em 0.75em;
+    font-weight: bold;
+    font-size: 0.95em;
+  }
+  .status-badge-closed {
+    background: var(--color-closed);
+    color: #fff;
+    border-radius: 0.5rem;
+    padding: 0.25em 0.75em;
+    font-weight: bold;
+    font-size: 0.95em;
   }
 
   .breadcrumb {
-    display: flex;
-    gap: 0.35rem;
-    margin-bottom: 0.75rem;
     color: var(--color-light-text);
-    font-size: 0.75rem;
+    font-size: 0.97em;
+    margin-bottom: 12px;
   }
 
   .holiday-advisory {
+    background: #FFF9E5;
+    color: #B45309;
+    border-left: 6px solid #FBBF24;
+    font-weight: bold;
+    padding: 16px 20px;
+    margin: 18px 0 24px 0;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin: 1.125rem 0 1.5rem;
-    border-left: 4px solid #fbbf24;
-    border-radius: 0.25rem;
-    background: #fffbeb;
-    padding: 0.875rem 1rem;
-    color: #92400e;
-    font-size: 0.8rem;
-    font-weight: 600;
+    gap: 0.75em;
+    border-radius: 0.5rem;
+    font-size: 1em;
+  }
+
+  .holiday-advisory .icon {
+    font-size: 1.3em;
+    margin-right: 0.5em;
   }
 
   .bullet-list {
-    margin: 0.5rem 0;
-    padding-left: 1.2rem;
-    list-style: disc;
+    padding-left: 1.2em;
+    margin: 0.5em 0 0.5em 0;
   }
 
   .bullet-list li {
-    margin-bottom: 0.3rem;
+    margin-bottom: 0.3em;
     line-height: 1.5;
   }
 
@@ -83,6 +110,177 @@
     outline: 3px solid rgba(44, 122, 95, 0.45);
     outline-offset: 2px;
   }
+
+  html[data-accessibility-contrast="high"] {
+    --color-body: #000000;
+    --color-light-text: #000000;
+    --color-border: #000000;
+    color: #000000;
+    color-scheme: light;
+  }
+
+  html[data-accessibility-contrast="high"] body :where(.public-page-shell *, [data-accessibility-ui] *, [role="dialog"], [role="dialog"] *) {
+    border-color: #000000 !important;
+    box-shadow: none !important;
+    color: #000000 !important;
+    text-shadow: none !important;
+  }
+
+  html[data-accessibility-contrast="high"] body :where(.public-page-shell *, [data-accessibility-ui] *, [role="dialog"], [role="dialog"] *):not(img, svg, path, canvas, video, iframe) {
+    background-color: #ffffff !important;
+    background-image: none !important;
+  }
+
+  html[data-accessibility-contrast="high"] .public-page-shell {
+    background-color: #ffffff !important;
+    background-image: none !important;
+  }
+
+  html[data-accessibility-contrast="high"] .public-page-shell,
+  html[data-accessibility-contrast="high"] .public-page-shell * {
+    color: #000000 !important;
+  }
+
+  html[data-accessibility-contrast="high"] .public-page-shell button,
+  html[data-accessibility-contrast="high"] [data-accessibility-ui] button,
+  html[data-accessibility-contrast="high"] [role="dialog"] button {
+    border: 2px solid #000000 !important;
+  }
+
+  html[data-accessibility-contrast="high"] .public-page-shell [aria-pressed="true"],
+  html[data-accessibility-contrast="high"] [data-accessibility-ui] [aria-pressed="true"] {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+  }
+
+  html[data-accessibility-contrast="high"] [data-accessibility-ui].fixed.inset-0 {
+    background-color: rgb(0 0 0 / 75%) !important;
+  }
+
+  html[data-accessibility-contrast="high"] .public-page-shell a {
+    text-decoration: underline !important;
+    text-decoration-thickness: 2px !important;
+    text-underline-offset: 0.18em;
+  }
+
+  html[data-accessibility-contrast="high"] .public-page-shell .footer-enter {
+    border-color: #000000 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  html[data-accessibility-contrast="high"] .public-page-shell .footer-enter * {
+    color: #000000 !important;
+  }
+
+  html[data-accessibility-contrast="high"] :focus-visible {
+    outline: 4px solid #000000;
+    outline-offset: 3px;
+  }
+
+  html[data-accessibility-contrast="smart"] {
+    --color-body: #1f2937;
+    --color-light-text: #374151;
+    --color-border: #64748b;
+    color-scheme: light;
+  }
+
+  html[data-accessibility-contrast="smart"] .site-section-bg {
+    background-color: #ffffff !important;
+    background-image: none !important;
+  }
+
+  html[data-accessibility-contrast="smart"] .site-section-bg :where(p, li, small, .breadcrumb) {
+    color: #303a45 !important;
+  }
+
+  html[data-accessibility-contrast="smart"] .accessibility-dark-details :where(p, li, span) {
+    color: #f0fdf4 !important;
+  }
+
+  html[data-accessibility-contrast="smart"] .site-card,
+  html[data-accessibility-contrast="smart"] .site-section-bg article {
+    border-color: #64748b !important;
+  }
+
+  html[data-accessibility-contrast="smart"] .public-page-shell :where(button, a, input, select, textarea) {
+    border-color: #475569;
+  }
+
+  html[data-accessibility-text-spacing="true"] body :where(p, li, label, dd, dt) {
+    letter-spacing: 0.04em;
+    word-spacing: 0.12em;
+    line-height: 1.8;
+    overflow-wrap: anywhere;
+  }
+
+  html[data-accessibility-dyslexia-font="true"] body,
+  html[data-accessibility-dyslexia-font="true"] body :where(button, input, select, textarea) {
+    font-family: "Trebuchet MS", Arial, sans-serif;
+    letter-spacing: 0.025em;
+  }
+
+  html[data-accessibility-large-cursor="true"] body,
+  html[data-accessibility-large-cursor="true"] body :where(button, a, input, select, textarea, [role="button"]) {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cpath d='M5 3v27l8-8 6 13 5-2-6-12h11z' fill='white' stroke='black' stroke-width='2'/%3E%3C/svg%3E") 5 3, auto;
+  }
+
+  html[data-accessibility-touch-targets="true"] body :where(button, a, input, select, textarea, [role="button"]) {
+    min-height: 48px;
+  }
+
+  html[data-accessibility-highlight-links="true"] body :where(a, button, [role="button"], input, select, textarea) {
+    outline: 2px solid #9a5b00;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px #ffffff;
+  }
+
+  html[data-accessibility-highlight-links="true"] body a {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.18em;
+  }
+
+  html[data-accessibility-reduce-motion="true"] *,
+  html[data-accessibility-reduce-motion="true"] *::before,
+  html[data-accessibility-reduce-motion="true"] *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  @media (prefers-contrast: more), (forced-colors: active) {
+    html[data-accessibility-contrast="smart"] :focus-visible {
+      outline: 3px solid CanvasText;
+    }
+
+    html[data-accessibility-contrast="smart"] button,
+    html[data-accessibility-contrast="smart"] a,
+    html[data-accessibility-contrast="smart"] input,
+    html[data-accessibility-contrast="smart"] select,
+    html[data-accessibility-contrast="smart"] textarea {
+      border-color: CanvasText;
+    }
+  }
+}
+
+.skip-to-content {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 100;
+  transform: translateY(-150%);
+  border-radius: 0.25rem;
+  background: #ffffff;
+  padding: 0.75rem 1rem;
+  color: #0f4d3c;
+  font-weight: 700;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+.skip-to-content:focus {
+  transform: translateY(0);
 }
 
 .public-page-shell {
@@ -93,6 +291,13 @@
 .site-section-bg {
   background-color: var(--color-page-bg);
   background-image: linear-gradient(180deg, #ffffff 0%, var(--color-page-bg) 100%);
+}
+
+.site-card {
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 16px rgba(15, 77, 60, 0.045);
 }
 
 .map-dark-tiles {

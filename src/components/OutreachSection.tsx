@@ -1,6 +1,7 @@
 import React from 'react';
 import { useHealthCenter } from '../context/HealthCenterContext';
 import { Calendar, Clock, MapPin, Users, CheckCircle, Ticket, XCircle } from 'lucide-react';
+import { formatAppointmentTime } from '../appointmentSchedule';
 
 export const OutreachSection: React.FC = () => {
   const {
@@ -8,20 +9,21 @@ export const OutreachSection: React.FC = () => {
     language,
     openBookingForProgram,
     setBookingModalOpen,
-    clinicOpen,
     appointmentRequestAvailability,
     appointments,
     cancelAppointment,
     siteContent
   } = useHealthCenter();
-  const bookingEnabled = clinicOpen === true && appointmentRequestAvailability === 'available';
+  const bookingEnabled = appointmentRequestAvailability === 'available';
   const bookingLabel = appointmentRequestAvailability === 'pending'
     ? 'Appointment under review'
+    : appointmentRequestAvailability === 'confirmed'
+      ? 'Accepted appointment active'
     : appointmentRequestAvailability === 'checking'
       ? 'Checking request status'
       : appointmentRequestAvailability === 'error'
         ? 'Unable to check request'
-        : clinicOpen === true ? 'REQUEST AN APPOINTMENT' : clinicOpen === false ? 'CLOSED' : 'Checking availability';
+        : 'REQUEST AN APPOINTMENT';
 
   return (
     <section id="outreach" className="py-16 bg-white border-b border-slate-200">
@@ -129,7 +131,7 @@ export const OutreachSection: React.FC = () => {
                 </h3>
                 <p className="text-xs text-slate-500">
                   {language === 'fil'
-                    ? 'Ipakita ang reference code sa triage desk pagdating sa Mayor Juan R. Sanchez Health Center.'
+                    ? 'Ipakita ang reference code sa triage desk pagdating sa Mr. Flores Health Center.'
                     : 'Present this reference ticket at the health center registration desk on arrival.'}
                 </p>
               </div>
@@ -171,7 +173,7 @@ export const OutreachSection: React.FC = () => {
                     <div className="flex items-center gap-3">
                       <span>{apt.appointmentDate}</span>
                       <span aria-hidden="true">·</span>
-                      <span>{apt.timeSlot}</span>
+                      <span>{formatAppointmentTime(apt.timeSlot)}</span>
                     </div>
 
                     {apt.status === 'Confirmed' && (

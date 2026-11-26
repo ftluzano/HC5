@@ -3,15 +3,18 @@ import { useHealthCenter } from '../context/HealthCenterContext';
 import { Clock, MapPin, CalendarDays, ShieldAlert } from 'lucide-react';
 
 export const ContactSection: React.FC = () => {
-  const { t, language, setBookingModalOpen, clinicOpen, appointmentRequestAvailability } = useHealthCenter();
-  const bookingEnabled = clinicOpen === true && appointmentRequestAvailability === 'available';
+  const { t, language, setBookingModalOpen, appointmentRequestAvailability, siteContent } = useHealthCenter();
+  const settings = siteContent.settings;
+  const bookingEnabled = appointmentRequestAvailability === 'available';
   const bookingLabel = appointmentRequestAvailability === 'pending'
     ? 'Appointment under review'
+    : appointmentRequestAvailability === 'confirmed'
+      ? 'Accepted appointment active'
     : appointmentRequestAvailability === 'checking'
       ? 'Checking request status'
       : appointmentRequestAvailability === 'error'
         ? 'Unable to check request'
-        : clinicOpen === true ? 'REQUEST AN APPOINTMENT' : clinicOpen === false ? 'CLOSED' : 'Checking availability';
+        : 'REQUEST AN APPOINTMENT';
 
   return (
     <section id="contact" className="py-16 sm:py-20 bg-[#f3f7f4] border-t border-slate-200">
@@ -24,7 +27,7 @@ export const ContactSection: React.FC = () => {
             {t.contactTitle}
           </h2>
           <p className="mt-3 text-base text-slate-600">
-            {language === 'fil' ? 'Magpadala ng online appointment request. Makikipag-ugnayan ang kawani para kumpirmahin ito.' : 'Send an appointment request online. Clinic staff will contact you to confirm.'}
+            {language === 'fil' ? 'Magpadala ng appointment request online anumang oras. Awtomatikong kinukumpirma ang mga request kapag available ang napiling schedule.' : 'Submit an appointment request online anytime. Requests are automatically confirmed when the selected schedule is available.'}
           </p>
         </div>
 
@@ -33,7 +36,7 @@ export const ContactSection: React.FC = () => {
             <CalendarDays className="w-5 h-5 text-teal-800 shrink-0 mt-1" />
             <div>
               <h3 className="text-sm font-bold text-slate-900">Online appointment</h3>
-              <p className="mt-1 text-sm text-slate-600">Choose a service and preferred date. Requests are confirmed by clinic staff.</p>
+              <p className="mt-1 text-sm text-slate-600">Appointments are automatically confirmed when the selected time is available.</p>
               <button disabled={!bookingEnabled} onClick={() => setBookingModalOpen(true)} className="mt-3 min-h-11 px-4 py-2.5 bg-teal-900 text-white text-sm font-bold rounded-md hover:bg-teal-950 disabled:cursor-not-allowed disabled:opacity-50">{bookingLabel}</button>
             </div>
           </div>
@@ -42,8 +45,8 @@ export const ContactSection: React.FC = () => {
             <MapPin className="w-5 h-5 text-teal-800 shrink-0 mt-1" />
             <div>
               <h3 className="text-sm font-bold text-slate-900">Mayor Juan R. Sanchez Health Center</h3>
-              <p className="mt-1 text-sm text-slate-600">Municipality of Pateros, Metro Manila</p>
-              <p className="mt-1 text-sm text-slate-600">Serving Barangay Sta. Ana Zones 1-6</p>
+              <p className="mt-1 text-sm text-slate-600">{language === 'fil' ? settings.clinicAddressFil : settings.clinicAddress}</p>
+              <p className="mt-1 text-sm text-slate-600">{language === 'fil' ? settings.contactPhone : settings.contactPhone}</p>
             </div>
           </div>
 
@@ -51,17 +54,19 @@ export const ContactSection: React.FC = () => {
             <Clock className="w-5 h-5 text-teal-800 shrink-0 mt-1" />
             <div>
               <h3 className="text-sm font-bold text-slate-900">Clinic schedules</h3>
-              <p className="mt-1 text-sm text-slate-600">No permanent doctor; duty personnel Tue-Fri, 8-11 AM</p>
-              <p className="mt-1 text-sm text-slate-600">No X-ray service listed</p>
-              <p className="mt-1 text-sm text-slate-600">Services: Monday-Friday, 7:00 AM-11:30 AM and 12:00 PM-4:00 PM</p>
+              <p className="mt-1 text-sm text-slate-600">{language === 'fil' ? settings.doctorHoursFil : settings.doctorHours}</p>
+              <p className="mt-1 text-sm text-slate-600">{language === 'fil' ? settings.xrayHoursFil : settings.xrayHours}</p>
+              <p className="mt-1 text-sm text-slate-600">{language === 'fil' ? settings.dentalHoursFil : settings.dentalHours}</p>
             </div>
           </div>
         </div>
 
-        <a href="tel:+63286425159" className="mt-6 flex items-start gap-3 text-sm text-slate-700 hover:text-teal-900">
-          <ShieldAlert className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
-          <span><strong className="text-slate-900">Emergency rescue:</strong> (02) 8642-5159 · 24-hour ambulance and disaster response</span>
-        </a>
+        {settings.emergencyPhone && (
+          <a href={`tel:${settings.emergencyPhone.replace(/[^\d+]/g, '')}`} className="mt-6 flex items-start gap-3 text-sm text-slate-700 hover:text-teal-900">
+            <ShieldAlert className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
+            <span><strong className="text-slate-900">Emergency:</strong> {language === 'fil' ? settings.emergencyPhoneFil : settings.emergencyPhone}</span>
+          </a>
+        )}
       </div>
     </section>
   );
