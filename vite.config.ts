@@ -51,6 +51,55 @@ function appointmentsApiDevPlugin(): Plugin {
       };
       server.middlewares.use('/api/admin', adminApiMiddleware);
       server.middlewares.use('/api/health-data', healthApiMiddleware);
+      server.middlewares.use('/api/support-chat', async (request, response, next) => {
+        void next;
+        try {
+          const apiRequest = request as typeof request & { body?: unknown; headers: IncomingHttpHeaders };
+          if (request.method === 'POST') {
+            const chunks: Buffer[] = [];
+            let size = 0;
+            for await (const chunk of request) {
+              const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+              size += buffer.length;
+              if (size > 8_192) {
+                response.statusCode = 413;
+                response.setHeader('Content-Type', 'application/json');
+                response.end(JSON.stringify({ error: 'Question is too large.' }));
+                return;
+              }
+              chunks.push(buffer);
+            }
+            try {
+              apiRequest.body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+            } catch {
+              response.statusCode = 400;
+              response.setHeader('Content-Type', 'application/json');
+              response.end(JSON.stringify({ error: 'Invalid JSON request body.' }));
+              return;
+            }
+          }
+          const apiResponse = response as typeof response & {
+            status: (code: number) => typeof response;
+            json: (body: unknown) => void;
+          };
+          apiResponse.status = (code) => {
+            response.statusCode = code;
+            return response;
+          };
+          apiResponse.json = (body) => {
+            response.setHeader('Content-Type', 'application/json');
+            response.end(JSON.stringify(body));
+          };
+          const { default: handler } = await server.ssrLoadModule('/api/support-chat.ts');
+          await handler(apiRequest, apiResponse);
+        } catch (error) {
+          console.error('Local support chat API failed:', error);
+          if (response.headersSent) return;
+          response.statusCode = 500;
+          response.setHeader('Content-Type', 'application/json');
+          response.end(JSON.stringify({ error: 'Support chat is temporarily unavailable.' }));
+        }
+      });
       server.middlewares.use('/api/appointments', async (request, response, next) => {
         try {
           const apiRequest = request as typeof request & { body?: unknown };

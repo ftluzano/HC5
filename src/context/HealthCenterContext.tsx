@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/react';
 import {
   Language,
@@ -39,6 +39,9 @@ interface HealthCenterContextType {
   isSignedIn: boolean;
   messagesOpen: boolean;
   setMessagesOpen: (open: boolean) => void;
+  messagesReferenceCode: string | null;
+  openMessagesForAppointment: (referenceCode: string) => void;
+  clearMessagesReferenceCode: () => void;
   appointmentRequestAvailability: 'checking' | 'available' | 'pending' | 'confirmed' | 'error';
   markAppointmentRequestStatus: (status: 'pending' | 'confirmed') => void;
   siteContent: PublicSiteContent;
@@ -55,7 +58,7 @@ interface HealthCenterContextType {
 const HealthCenterContext = createContext<HealthCenterContextType | undefined>(undefined);
 
 export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isSignedIn, userId } = useAuth();
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = localStorage.getItem('mfhc_language');
     return (saved === 'fil' || saved === 'en') ? saved : 'en';
@@ -78,6 +81,7 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
+  const [messagesReferenceCode, setMessagesReferenceCode] = useState<string | null>(null);
   const [appointmentRequestAvailability, setAppointmentRequestAvailability] = useState<'checking' | 'available' | 'pending' | 'confirmed' | 'error'>(() => isSignedIn ? 'checking' : 'available');
   const [authModalOpen, setAuthModalOpenState] = useState(false);
   const [siteContent, setSiteContent] = useState<PublicSiteContent>(() => ({
@@ -91,6 +95,8 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [unreadMessagesError, setUnreadMessagesError] = useState('');
   const [selectedProgramForBooking, setSelectedProgramForBooking] = useState<string | null>(() => sessionStorage.getItem('mfhc_booking_program'));
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
+  const previousAppointmentStatuses = useRef(new Map<string, string>());
+  const previousStatusUserId = useRef<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem('mfhc_language', language);
@@ -105,6 +111,12 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
     setAuthModalOpenState(open);
   };
+
+  const openMessagesForAppointment = useCallback((referenceCode: string) => {
+    setMessagesReferenceCode(referenceCode);
+    setMessagesOpen(true);
+  }, []);
+  const clearMessagesReferenceCode = useCallback(() => setMessagesReferenceCode(null), []);
 
   const setBookingAvailabilityModal = (open: boolean) => {
     if (!open) {
@@ -126,8 +138,14 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   useEffect(() => {
     if (!isSignedIn) {
+      previousAppointmentStatuses.current.clear();
+      previousStatusUserId.current = null;
       setAppointmentRequestAvailability('available');
       return;
+    }
+    if (previousStatusUserId.current !== userId) {
+      previousAppointmentStatuses.current.clear();
+      previousStatusUserId.current = userId ?? null;
     }
     let active = true;
     let loading = false;
@@ -142,13 +160,21 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
           cache: 'no-store',
         });
         const result = await response.json() as {
-          appointments?: Array<{ status: string }>;
+          appointments?: Array<{ status: string; reference_code: string }>;
           error?: string;
         };
         if (!response.ok || !Array.isArray(result.appointments)) {
           throw new Error(result.error || 'Appointment request status could not be checked.');
         }
         if (active) {
+          result.appointments.forEach((appointment) => {
+            const status = appointment.status.toLowerCase();
+            const previousStatus = previousAppointmentStatuses.current.get(appointment.reference_code);
+            if (previousStatus && previousStatus !== 'missed' && status === 'missed') {
+              setNotificationToast(`Appointment ${appointment.reference_code} was marked as missed. You can now submit a new appointment request.`);
+            }
+            previousAppointmentStatuses.current.set(appointment.reference_code, status);
+          });
           const statuses = result.appointments.map((appointment) => appointment.status.toLowerCase());
           const availability = statuses.includes('pending')
             ? 'pending'
@@ -177,7 +203,7 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
-  }, [getToken, isSignedIn]);
+  }, [getToken, isSignedIn, userId]);
 
   useEffect(() => {
     let active = true;
@@ -515,11 +541,11 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const botReply: ChatMessage = {
         id: `m-${Date.now() + 1}`,
         sender: 'staff',
-        senderName: 'Ms. Sery Ann G. Ulanday, RN / Clinic Desk',
-        senderRole: 'Mr. Flores Health Center',
+        senderName: 'Clinic Desk',
+        senderRole: 'Mayor Juan R. Sanchez Health Center',
         text: language === 'fil'
-          ? `Natanggap po namin ang mensahe para sa ${activePatient.fullName} (${activePatient.zone}). Bukas ang center Lunes hanggang Biyernes 7AM-4PM.`
-          : `We received your inquiry for ${activePatient.fullName} (${activePatient.zone}). The center is open Monday to Friday, 7:00 AM - 4:00 PM.`,
+          ? 'Natanggap na po namin ang inyong mensahe. Makikipag-ugnayan po sa inyo ang kawani ng health center.'
+          : 'We received your message. A health center staff member will follow up with you.',
         timestamp: 'Just now'
       };
 
@@ -588,6 +614,9 @@ export const HealthCenterProvider: React.FC<{ children: React.ReactNode }> = ({ 
         isSignedIn: Boolean(isSignedIn),
         messagesOpen,
         setMessagesOpen,
+        messagesReferenceCode,
+        openMessagesForAppointment,
+        clearMessagesReferenceCode,
         appointmentRequestAvailability,
         markAppointmentRequestStatus,
         siteContent,
